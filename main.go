@@ -38,13 +38,13 @@ func handleErr(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_, err := w.Write([]byte(message))
-
 	if err != nil {
 		log.Printf("%v, %v \n", message, err)
 	}
 }
 
-// Checks if the user have set the time properties when they created or updated the book instance.
+// Checks if the user have set the time properties when they created or updated
+// the book instance.
 func checkTimeProperties(createTime, updateTime time.Time) bool {
 	if createTime.IsZero() && updateTime.IsZero() {
 		return true
@@ -56,7 +56,6 @@ func checkTimeProperties(createTime, updateTime time.Time) bool {
 //Validates if the given input given is correct.
 //if correct we return boolean true, otherwise boolean false.
 func validate(b Book) (bool, string) {
-
 	if matchedISBN, _ := regexp.MatchString(`\d{13}`, b.ISBN); !matchedISBN {
 		return false, "isbn"
 	} else if matchedTitle, _ := regexp.MatchString(`.`, b.Title); !matchedTitle {
@@ -124,6 +123,7 @@ func (s *server) createBook(w http.ResponseWriter, r *http.Request) {
 func (s *server) deleteBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-Type", "application/json")
 	params := mux.Vars(r)
+	// Note(sn): invert if statement (don't need an else then)
 	if _, exists := s.books[params["isbn"]]; exists {
 		for index, item := range s.booksList {
 			if item.ISBN == params["isbn"] {
@@ -146,6 +146,7 @@ func (s *server) updateBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-Type", "application/json")
 	params := mux.Vars(r)
 	//Todo-(nico) Fixa så att användaren inte behöver skriva in alla felt som de var innan om de bara vill ändra en sak
+	// note(sn): invert this one too
 	if _, exists := s.books[params["isbn"]]; exists {
 		for index, item := range s.booksList {
 			if item.ISBN == params["isbn"] {
