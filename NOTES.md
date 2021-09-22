@@ -1,9 +1,9 @@
 # Notes
 
-* Validation, checker functions etc should return only error
-* Collect field errors while validating and return all of them in the error
-* Avoid chaining else if statements (all code after an if is implicitly an else)
-* Move time checker function to where it is used
+* Validation, checker functions etc should return only error (Done)
+* Collect field errors while validating and return all of them in the error (maybe done?)
+* Avoid chaining else if statements (all code after an if is implicitly an else) (Done)
+* Move time checker function to where it is used (Done)
 
 ## Next steps
 
