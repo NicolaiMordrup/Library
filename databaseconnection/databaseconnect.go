@@ -15,11 +15,9 @@ import (
 //TODO fix such that the database handles errors correct.
 func ConnectToDatabase() {
 	db, _ := sql.Open("sqlite", "./librarystorage.db")
+	CreateDatabase(db)
 
-	stmt, _ := db.Prepare("CREATE TABLE IF NOT EXISTS library(isbn INTEGER PRIMARY KEY, title TEXT, createTime TEXT, UpdateTime text)")
-	//res, _ := stmt.Exec()
-	stmt.Exec()
-	stmt, _ = db.Prepare("INSERT INTO library (title ,createTime, updateTime) VALUES(?,?,?)")
+	stmt, _ := db.Prepare("INSERT INTO library (title ,createTime, updateTime) VALUES(?,?,?)")
 	var createdTime string = time.Now().String()
 	var updatedTime string = time.Now().String()
 	stmt.Exec("book_2", createdTime, updatedTime)
@@ -50,10 +48,26 @@ func ReadDatabase(rows *sql.Rows) {
 
 // DeleteDatabase deletes the database. Takes a database as input
 func DeleteDatabase(db *sql.DB) {
-	//TODO create the code for this
+	stmt, err := db.Prepare("DROP TABLE ./librarystorage.db")
+	if err != nil {
+		handleErr("Failed  to delete the database")
+		return
+	}
+	stmt.Exec()
 }
 
 // CreateDatabase creates the table if it is not already created
-func CreateDatabase() {
-	//TODO create the code for this
+func CreateDatabase(db *sql.DB) {
+	stmt, err := db.Prepare("CREATE TABLE IF NOT EXISTS library(isbn INTEGER PRIMARY KEY, title TEXT, createTime TEXT, UpdateTime text)")
+	if err != nil {
+		handleErr("Failed to create the database ")
+		return
+	}
+	stmt.Exec()
+
+}
+
+//Handles the error printing
+func handleErr(errMessage string) {
+	fmt.Errorf(errMessage)
 }

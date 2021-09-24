@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+//TODO t.Format("2006-01-02 15:04:05") to format the time. (Måste hitta en annan lösning)
 // Struct for the server.
 type server struct {
 	books     map[string]Book // Map of the ISBN as key and a Book instance as value
@@ -35,10 +36,10 @@ type Author struct {
 	LastName  string `json:"lastName"`
 }
 
-// handleErr for when we get an error.
+// HandleErr for when we get an error.
 // If succesfull it writes what type of error in the header we get and then
 // display the error message for the user.
-func handleErr(w http.ResponseWriter, code int, message string) {
+func HandleErr(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_, err := w.Write([]byte(message))
@@ -85,7 +86,7 @@ func validate(b Book) error {
 func (s *server) GetBooks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(s.booksList); err != nil {
-		handleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -99,11 +100,11 @@ func (s *server) GetBook(w http.ResponseWriter, r *http.Request) {
 	val, exists := s.books[params["isbn"]]
 
 	if !exists {
-		handleErr(w, http.StatusNotFound, "The book did not exist in the library")
+		HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
 		return
 	}
 	if err := json.NewEncoder(w).Encode(val); err != nil {
-		handleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -117,28 +118,28 @@ func (s *server) CreateBook(w http.ResponseWriter, r *http.Request) {
 	var book Book
 
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		handleErr(w, http.StatusBadRequest, "Failed to decode book")
+		HandleErr(w, http.StatusBadRequest, "Failed to decode book")
 		return
 	}
 	if _, exists := s.books[book.ISBN]; exists {
-		handleErr(w, http.StatusConflict, "A book with this ISBN already exits")
+		HandleErr(w, http.StatusConflict, "A book with this ISBN already exits")
 		return
 	}
 	if !(book.CreateTime.IsZero() && book.UpdateTime.IsZero()) {
-		handleErr(w, http.StatusForbidden, "Not allowed to change CreateTime or UpdateTime")
+		HandleErr(w, http.StatusForbidden, "Not allowed to change CreateTime or UpdateTime")
 		return
 	}
 	if err := validate(book); err != nil {
-		handleErr(w, http.StatusNotAcceptable, err.Error())
+		HandleErr(w, http.StatusNotAcceptable, err.Error())
 		return
 	}
 
-	book.CreateTime = time.Now()
+	book.CreateTime = (time.Now())
 	s.books[book.ISBN] = book
 	s.booksList = append(s.booksList, book)
 
 	if err := json.NewEncoder(w).Encode(book); err != nil {
-		handleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -151,7 +152,7 @@ func (s *server) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 
 	if _, exists := s.books[params["isbn"]]; !exists {
-		handleErr(w, http.StatusNotFound, "The book did not exist in the library or was already deleted")
+		HandleErr(w, http.StatusNotFound, "The book did not exist in the library or was already deleted")
 		return
 	}
 
@@ -162,7 +163,7 @@ func (s *server) DeleteBook(w http.ResponseWriter, r *http.Request) {
 		s.booksList = append(s.booksList[:index], s.booksList[index+1:]...) // Removes the book instance from the book slice
 		delete(s.books, params["isbn"])                                     // Removes the book instance from map.
 		if err := json.NewEncoder(w).Encode(s.booksList); err != nil {
-			handleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+			HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 			return
 		}
 		return
@@ -178,7 +179,7 @@ func (s *server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 
 	if _, exists := s.books[params["isbn"]]; !exists {
-		handleErr(w, http.StatusNotFound, "The book did not exist in the library")
+		HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
 		return
 	}
 
@@ -191,19 +192,19 @@ func (s *server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		var book Book
 
 		if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-			handleErr(w, http.StatusBadRequest, "Failed to decode book")
+			HandleErr(w, http.StatusBadRequest, "Failed to decode book")
 			return
 		}
 		if book.ISBN != params["isbn"] {
-			handleErr(w, http.StatusForbidden, "Not allowed to change ISBN")
+			HandleErr(w, http.StatusForbidden, "Not allowed to change ISBN")
 			return
 		}
 		if (time.Now().Unix() - updatedTime.Unix()) < 10 {
-			handleErr(w, http.StatusTooEarly, "Updated a few seconds ago, please wait a moment before updating again")
+			HandleErr(w, http.StatusTooEarly, "Updated a few seconds ago, please wait a moment before updating again")
 			return
 		}
 		if err := validate(book); err != nil {
-			handleErr(w, http.StatusNotAcceptable, err.Error())
+			HandleErr(w, http.StatusNotAcceptable, err.Error())
 			return
 		}
 
@@ -215,7 +216,7 @@ func (s *server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		s.books[book.ISBN] = book
 		s.booksList = append(s.booksList, book)
 		if err := json.NewEncoder(w).Encode(book); err != nil {
-			handleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+			HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 			return
 		}
 		return
