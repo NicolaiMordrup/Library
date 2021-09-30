@@ -3,46 +3,42 @@ package databaseconnection
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
-	"time"
 
 	// Import sqlite driver
 	_ "modernc.org/sqlite"
+	//"github.com/Nicolai.mordrup/Library/"
 )
+
+var Db *sql.DB
 
 // ConnectToDatabase connects to the database an checks if the file is already
 // created or not.
 //TODO fix such that the database handles errors correct.
-func ConnectToDatabase() {
-	db, _ := sql.Open("sqlite", "./librarystorage.db")
+func ConnectToDatabase(db *sql.DB) {
+	Db = db
 	CreateDatabase(db)
-
-	stmt, _ := db.Prepare("INSERT INTO library (title ,createTime, updateTime) VALUES(?,?,?)")
-	var createdTime string = time.Now().String()
-	var updatedTime string = time.Now().String()
-	stmt.Exec("book_2", createdTime, updatedTime)
-	rows, _ := db.Query("SELECT isbn, title ,createTime, updateTime FROM library")
-
-	ReadDatabase(rows)
 
 }
 
 // DatabaseQuery Prepers a database query and executes the query on the
 // database. It takes as input a query string and gives as output the rows
-func DatabaseQuery() /* *sql.Rows */ {
-	//TODO create the code for this
-}
+/*func DatabaseQuery(b Book) {
+	stmt, _ := Db.Prepare("INSERT INTO library (isbn,title ,createTime, updateTime) VALUES(?,?,?,?)")
+	stmt.Exec(b.ISBN, )
+}*/
 
 // ReadDatabase reads the information that we get from the database.
-func ReadDatabase(rows *sql.Rows) {
-	var isbn int
+func ReadDatabase(db *sql.DB) {
+	rows, _ := db.Query("SELECT isbn, title ,createTime, updateTime FROM library")
+
+	var isbn string
 	var title string
 	var createTime string
 	var updateTime string
 
 	for rows.Next() {
 		rows.Scan(&isbn, &title, &createTime, &updateTime)
-		fmt.Println(strconv.Itoa(isbn) + ": " + title + ": " + createTime + ": " + updateTime)
+		fmt.Println(isbn + ": " + title + ": " + createTime + ": " + updateTime)
 	}
 }
 
