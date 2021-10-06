@@ -54,7 +54,7 @@ func validate(b Book) error {
 	}
 
 	if len(fieldErrors) != 0 {
-		return fmt.Errorf("validation failed, field error(s): %v . Fix these error before proceeding",
+		return fmt.Errorf("validation failed, field error(s):%v. Fix these error before proceeding",
 			strings.Join(fieldErrors, ", "))
 	}
 	return nil

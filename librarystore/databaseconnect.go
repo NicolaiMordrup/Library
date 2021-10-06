@@ -23,12 +23,12 @@ func InsertIntoDatabase(db *sql.DB, b Book) {
 		return
 	}
 	stmtA.Exec(b.ISBN, b.Author.FirstName, b.Author.LastName)
-	stmtL.Exec(b.ISBN, b.Title, b.CreateTime, b.UpdateTime)
+	stmtL.Exec(b.ISBN, b.Title, b.CreateTime, b.UpdateTime, b.Publisher)
 }
 
 // ReadDatabase reads the information that we get from the database.
 func ReadDatabaseList(db *sql.DB) []Book {
-	rows, err := db.Query("SELECT library.isbn, library.title, library.createTime,library.updateTime,library.publisher,author.firstName, author.lastName FROM library INNER JOIN author ON library.isbn = author.isbn;")
+	rows, err := db.Query("SELECT library.isbn, library.title, library.createTime,library.updateTime,author.firstName, author.lastName ,library.publisher FROM library INNER JOIN author ON library.isbn = author.isbn;")
 	var b []Book
 	if err != nil {
 		handleErr("Failed to QUERY the statment to the database", err)
@@ -39,7 +39,7 @@ func ReadDatabaseList(db *sql.DB) []Book {
 
 //Reads from the database and find a specific book that exists.
 func FindSpecificBook(db *sql.DB, isbnToFind string) Book {
-	rows, err := db.Query(fmt.Sprintf("SELECT library.isbn, library.title,library.createTime,library.updateTime,library.publisher,author.firstName, author.lastName FROM library INNER JOIN author ON library.isbn = author.isbn WHERE library.isbn=%s;", isbnToFind))
+	rows, err := db.Query(fmt.Sprintf("SELECT library.isbn, library.title,library.createTime,library.updateTime,author.firstName, author.lastName ,library.publisher FROM library INNER JOIN author ON library.isbn = author.isbn WHERE library.isbn=%s;", isbnToFind))
 	var b []Book
 	if err != nil {
 		handleErr("Failed to QUERY the statment to the database", err)
@@ -60,6 +60,7 @@ func ReadRows(rows *sql.Rows, b []Book) []Book {
 	var updateTimedb time.Time
 	var firstNamedb string
 	var lastNamedb string
+	var publisherdb string
 
 	for rows.Next() {
 		rows.Scan(
@@ -69,10 +70,11 @@ func ReadRows(rows *sql.Rows, b []Book) []Book {
 			&updateTimedb,
 			&firstNamedb,
 			&lastNamedb,
+			&publisherdb,
 		)
 		b = append(b, Book{ISBN: isbndb, Title: titledb, CreateTime: createTimedb,
 			UpdateTime: updateTimedb, Author: &Author{FirstName: firstNamedb,
-				LastName: lastNamedb}})
+				LastName: lastNamedb}, Publisher: publisherdb})
 	}
 	return b
 }
