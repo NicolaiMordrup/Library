@@ -1,4 +1,4 @@
-package librarystore
+package library
 
 import (
 	"bytes"

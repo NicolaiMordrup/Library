@@ -1,4 +1,4 @@
-module github.com/Nicolai.mordrup/Library
+module github.com/NicolaiMordrup/library
 
 go 1.17
 

@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	library "github.com/Nicolai.mordrup/Library/librarystore"
+	library "github.com/Nicolai.mordrup/library"
 	_ "modernc.org/sqlite"
 )
 
