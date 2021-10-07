@@ -20,7 +20,7 @@ func validBook(isbn string) Book {
 	b := Book{
 		ISBN:  isbn,
 		Title: "star wars",
-		Author: &Author{
+		Author: Author{
 			FirstName: "george",
 			LastName:  "lucas",
 		},
@@ -34,7 +34,7 @@ func invalidBookTime() Book {
 		ISBN:       "1233211233218",
 		Title:      "star wars the revenge of the sith",
 		CreateTime: time.Now(),
-		Author: &Author{
+		Author: Author{
 			FirstName: "george",
 			LastName:  "lucas",
 		},
@@ -47,7 +47,7 @@ func invalidBookISBN() Book {
 	b := Book{
 		ISBN:  "123321123321a",
 		Title: "star wars the revenge of the sith",
-		Author: &Author{
+		Author: Author{
 			FirstName: "george",
 			LastName:  "lucas",
 		},

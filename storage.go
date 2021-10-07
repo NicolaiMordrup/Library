@@ -10,6 +10,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type DBstorage struct {
+	db *sql.DB
+}
+
 // Note(sn): Rename this file and create a new type DBStorage struct
 // Struct should contain the sql database
 // Server should call this storage
@@ -77,7 +81,7 @@ func ReadRows(rows *sql.Rows, b []Book) []Book {
 			&publisherdb,
 		)
 		b = append(b, Book{ISBN: isbndb, Title: titledb, CreateTime: createTimedb,
-			UpdateTime: updateTimedb, Author: &Author{FirstName: firstNamedb,
+			UpdateTime: updateTimedb, Author: Author{FirstName: firstNamedb,
 				LastName: lastNamedb}, Publisher: publisherdb})
 	}
 	return b
@@ -93,6 +97,7 @@ func DeleteBookFromDB(db *sql.DB, isbn string) {
 	}
 }
 
+// TODO fix such that this is a log
 //Handles the error printing
 func handleErr(errMessage string, err error) {
 	fmt.Println(fmt.Errorf("database Error: %s, %s", errMessage, err.Error()))
