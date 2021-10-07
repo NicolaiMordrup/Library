@@ -10,7 +10,11 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
+
+// Note(sn): create valid and invalid examples here and share between tests.
 
 func assertContentType(t testing.TB, response *httptest.ResponseRecorder,
 	want, warningMessage string) {
@@ -72,16 +76,24 @@ func assertEqualBooks(t *testing.T, got, wanted []Book, warningMessage string) {
 	}
 }
 
-func createTempDatabase(t *testing.T) *sql.DB {
+func createTempDatabase(t *testing.T) (*sql.DB, func() error) {
 	t.Helper()
-	db, err := sql.Open("sqlite", "librarystoragetemptest.db")
-	Check(err, "failed to open sqlite connection")
-	Check(EnsureSchema(db), "migration failed")
-	return db
+	tempFile, err := os.CreateTemp("", "")
+	require.NoError(t, err)
+	db, err := sql.Open("sqlite", tempFile.Name())
+	require.NoError(t, err)
+	require.NoError(t, EnsureSchema(db))
+	cleanup := func() error {
+		return os.Remove(tempFile.Name()) // Removes the temporary file
+	}
+	return db, cleanup
 }
 
-func createNewRequest(httpMethod, urlPath string, jsonBytes []byte,
-	db *sql.DB) *httptest.ResponseRecorder {
+func createNewRequest(
+	httpMethod, urlPath string,
+	jsonBytes []byte,
+	db *sql.DB,
+) *httptest.ResponseRecorder {
 	request, _ := http.NewRequest(httpMethod, urlPath,
 		bytes.NewReader(jsonBytes))
 	request.Header.Set("Content-Type", "application/json")
@@ -91,8 +103,8 @@ func createNewRequest(httpMethod, urlPath string, jsonBytes []byte,
 }
 
 func TestCREATEBookMETHOD(t *testing.T) {
-	db := createTempDatabase(t)
-	defer os.Remove("librarystoragetemptest.db") // Removes the temporary file
+	db, cleanup := createTempDatabase(t)
+	defer cleanup()
 
 	t.Run("Creates a book and stores it in the library", func(t *testing.T) {
 		///Arange
@@ -106,6 +118,7 @@ func TestCREATEBookMETHOD(t *testing.T) {
 			Publisher: "adlibris"}
 		dataInfo := &want
 
+		// Note(sn): require.NoError(t, err)
 		jsonBytes, _ := json.Marshal(dataInfo)
 
 		// Act
@@ -204,8 +217,8 @@ func TestCREATEBookMETHOD(t *testing.T) {
 }
 
 func TestGETBooksMETHOD(t *testing.T) { //List
-	db := createTempDatabase(t)
-	defer os.Remove("librarystoragetemptest.db") // Removes the temporary file
+	db, cleanup := createTempDatabase(t)
+	defer cleanup()
 
 	t.Run("Creates two book instances and stores it in the library database",
 		func(t *testing.T) {
@@ -216,8 +229,10 @@ func TestGETBooksMETHOD(t *testing.T) { //List
 				Title: "star wars",
 				Author: &Author{
 					FirstName: "george",
-					LastName:  "lucas"},
-				Publisher: "adlibris"}
+					LastName:  "lucas",
+				},
+				Publisher: "adlibris",
+			}
 			dataInfo := &want
 
 			jsonBytes, err := json.Marshal(dataInfo)
@@ -305,8 +320,9 @@ func TestGETBooksMETHOD(t *testing.T) { //List
 }
 
 func TestDELETEBookMETHOD(t *testing.T) { //List
-	db := createTempDatabase(t)
-	defer os.Remove("librarystoragetemptest.db") // Removes the temporary file
+	t.Parallel()
+	db, cleanup := createTempDatabase(t)
+	defer cleanup()
 
 	t.Run("Creates two book instances and stores it in the library database",
 		func(t *testing.T) {
@@ -382,8 +398,8 @@ func TestDELETEBookMETHOD(t *testing.T) { //List
 }
 
 func TestUpdateBooks(t *testing.T) {
-	db := createTempDatabase(t)
-	defer os.Remove("librarystoragetemptest.db") // Removes the temporary file
+	db, cleanup := createTempDatabase(t)
+	defer cleanup()
 
 	t.Run("Creates a book instances and stores it in the library database",
 		func(t *testing.T) {

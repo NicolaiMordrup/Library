@@ -23,13 +23,14 @@ func (e BookErr) Error() string {
 	return string(e)
 }
 
-// Struct for the Server.
+// Server contains the server stuff.
 type Server struct {
-	router *mux.Router
-	db     *sql.DB
+	router                    *mux.Router
+	db                        *sql.DB
+	minDurationBetweenUpdates time.Duration
 }
 
-//NewServer creates a new server instance
+// NewServer creates a new server instance.
 func NewServer(datab *sql.DB) *Server {
 	s := &Server{}
 
@@ -42,11 +43,10 @@ func NewServer(datab *sql.DB) *Server {
 
 	s.router = router
 	s.db = datab
-	//ConnectToDatabase(s.db) //connects to database
 	return s
 }
 
-//ServeHTTP is needed to be implemented when we use the router in the struct
+// ServeHTTP is needed to be implemented when we use the router in the struct.
 func (r *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.router.ServeHTTP(w, req)
 }
@@ -65,6 +65,7 @@ func HandleErr(w http.ResponseWriter, code int, message string) {
 
 // GetBooks retreives all the books that exists in the library structure.
 // if succesfull, it writes the JSON encoding of the books slice to the stream
+// Note(sn): Change to "ListBooks"
 func (s *Server) GetBooks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	book := ReadDatabaseList(s.db)
@@ -118,13 +119,13 @@ func (s *Server) CreateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Note(sn): set update time as well (same value as create time)
 	book.CreateTime = time.Now()
 	InsertIntoDatabase(s.db, book)
 	if err := json.NewEncoder(w).Encode(book); err != nil {
 		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
-
 }
 
 // DeleteBook deletes a book instance from the library.
@@ -154,6 +155,7 @@ func (s *Server) DeleteBook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-Type", "application/json")
 	params := mux.Vars(r)
+	// Note(sn): rename to existing book
 	exists := FindSpecificBook(s.db, params["isbn"])
 	if (exists == Book{}) {
 		HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
@@ -162,6 +164,7 @@ func (s *Server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 
 	createdTime := exists.CreateTime
 	updatedTime := exists.UpdateTime
+	// Note(sn): maybe call this new book?
 	var book Book
 
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
@@ -172,6 +175,9 @@ func (s *Server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		HandleErr(w, http.StatusForbidden, "Not allowed to change ISBN")
 		return
 	}
+	// Note(sn): use configured value, this will make it easier to test
+	// time.Now().Sub(updatedTime) < s.minDurationBetweenUpdates
+	// time.Now().After(updatedTime.Add(s.minDurationBetweenUpdates))
 	if (time.Now().Unix() - updatedTime.Unix()) < 10 {
 		HandleErr(w, http.StatusTooEarly, "Updated a few seconds ago, please wait a moment before updating again")
 		return

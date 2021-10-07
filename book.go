@@ -14,7 +14,9 @@ type Book struct {
 	CreateTime time.Time `json:"createTime"` // The time of creation of book instance
 	UpdateTime time.Time `json:"updateTime"` // The time of update for book instance
 	Publisher  string    `json:"publisher"`
-	Author     *Author   `json:"author"` // Embedded author struct
+	// Note(sn): since this is a pointer, I expect that it could be nil, which
+	// is not the case.
+	Author *Author `json:"author"` // Embedded author struct
 }
 
 // Struct for the books Author properties.

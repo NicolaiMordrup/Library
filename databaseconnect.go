@@ -10,6 +10,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Note(sn): Rename this file and create a new type DBStorage struct
+// Struct should contain the sql database
+// Server should call this storage
+
 // DatabaseQuery Prepers a database query and executes the query on the
 // database. It takes as input a query string and gives as output the rows
 func InsertIntoDatabase(db *sql.DB, b Book) {
