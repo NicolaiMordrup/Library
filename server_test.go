@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
-
-// TODO ändra parameter listan i alla funktioner
 
 func validBook(isbn string) Book {
 	b := Book{
@@ -56,20 +55,17 @@ func invalidBookISBN() Book {
 	return b
 }
 
-func assertContentType(t testing.TB, response *httptest.ResponseRecorder,
-	want, warningMessage string) {
+func assertContentType(
+	t testing.TB,
+	response *httptest.ResponseRecorder,
+	_ string) {
 	t.Helper()
-	if response.Result().Header.Get("content-type") != want {
-		t.Errorf("response did not have content-type of %s, got %v", want,
+
+	if response.Result().Header.Get("content-type") != jsonContentType {
+		t.Errorf("response did not have content-type of %s, got %v", jsonContentType,
 			response.Result().Header)
 	}
-}
-
-func assertNoError(t testing.TB, got, want string) {
-	t.Helper()
-	if got != "" {
-		t.Errorf("got error %q did not want any error message", got)
-	}
+	response.Result().Body.Close()
 }
 
 func assertError(t testing.TB, got, want string) {
@@ -79,22 +75,22 @@ func assertError(t testing.TB, got, want string) {
 	}
 }
 
-func assertStatus(t testing.TB, got, want int, ShouldDo string) {
+func assertStatus(t testing.TB, got, want int, _ string) {
 	t.Helper()
 	if got != want {
 		t.Errorf("did not get correct status, got %d, want %d", got, want)
 	}
 }
 
-func assertDeletedBook(t *testing.T, isbn string, db *sql.DB, ShouldDo string) {
+func assertDeletedBook(t *testing.T, isbn string, server *Server, _ string) {
 	t.Helper()
-	book := FindSpecificBook(db, isbn)
+	book := server.store.FindSpecificBook(isbn)
 	if (book != Book{}) {
 		t.Errorf("The book with the isbn %q should have been deleted", isbn)
 	}
 }
 
-func assertEqualBook(t *testing.T, got, wanted Book, ShouldDo string) {
+func assertEqualBook(t *testing.T, got, wanted Book, _ string) {
 	t.Helper()
 	if got.ISBN != wanted.ISBN || got.Author.FirstName != wanted.Author.FirstName ||
 		got.Title != wanted.Title || got.Author.LastName != wanted.Author.LastName ||
@@ -103,9 +99,9 @@ func assertEqualBook(t *testing.T, got, wanted Book, ShouldDo string) {
 	}
 }
 
-func assertEqualBooks(t *testing.T, got, wanted []Book, ShouldDo string) {
+func assertEqualBooks(t *testing.T, got, wanted []Book, _ string) {
 	t.Helper()
-	for i, _ := range got {
+	for i := range got {
 		if got[i].ISBN != wanted[i].ISBN || got[i].Author.FirstName !=
 			wanted[i].Author.FirstName || got[i].Title != wanted[i].Title ||
 			got[i].Author.LastName != wanted[i].Author.LastName ||
@@ -115,17 +111,17 @@ func assertEqualBooks(t *testing.T, got, wanted []Book, ShouldDo string) {
 	}
 }
 
-func createTempDatabase(t *testing.T) (*sql.DB, func() error) {
+func createTempDatabase(t *testing.T) (db *sql.DB, cleanup func() error) {
 	t.Helper()
 	tempFile, err := os.CreateTemp("", "")
 	require.NoError(t, err)
-	db, err := sql.Open("sqlite", tempFile.Name())
+	db, err = sql.Open("sqlite", tempFile.Name())
 	require.NoError(t, err)
 	require.NoError(t, EnsureSchema(db))
-	cleanup := func() error {
+	cleanup = func() error {
 		return os.Remove(tempFile.Name()) // Removes the temporary file
 	}
-	return db, cleanup
+	return
 }
 
 func createNewRequest(
@@ -133,22 +129,31 @@ func createNewRequest(
 	httpMethod, urlPath string,
 	jsonBytes []byte,
 	db *sql.DB,
-) *httptest.ResponseRecorder {
+) (*httptest.ResponseRecorder,
+	*Server) {
+	structuredLogger, _ := zap.NewProduction()
+	log := structuredLogger.Sugar()
+	minDurationBetweenUpdatesStr := "10s"
+	minDurationBetweenUpdates, _ := time.ParseDuration(minDurationBetweenUpdatesStr)
 	request, err := http.NewRequest(httpMethod, urlPath,
 		bytes.NewReader(jsonBytes))
 	require.NoError(t, err)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
-	NewServer(db).ServeHTTP(response, request)
-	return response
+	server := NewServer(db, log, minDurationBetweenUpdates)
+	server.ServeHTTP(response, request)
+	return response, server
 }
 
 func TestCreate(t *testing.T) {
 	db, cleanup := createTempDatabase(t)
-	defer cleanup()
+	defer func() {
+		err := cleanup()
+		require.NoError(t, err)
+	}()
 
 	t.Run("Creates a book and stores it in the library", func(t *testing.T) {
-		///Arange
+		// Arange
 		isbn := "1233211233215"
 		want := validBook(isbn)
 		dataInfo := &want
@@ -157,16 +162,17 @@ func TestCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		response := createNewRequest(t, http.MethodPost,
+		response, server := createNewRequest(t, http.MethodPost,
 			"/api/books/"+isbn, jsonBytes, db)
-		got := FindSpecificBook(db, isbn)
+		got := server.store.FindSpecificBook(isbn)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json"+
+		// Assert
+		assertContentType(t, response, "Should have the json"+
 			"content type application/json")
 		assertStatus(t, response.Code, http.StatusOK, "Should get status code 200:"+
 			"status OK")
 		assertEqualBook(t, got, want, "Should be equal")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("Creates a book that already exists in the library", func(t *testing.T) {
@@ -178,17 +184,18 @@ func TestCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		response := createNewRequest(t, http.MethodPost,
+		response, _ := createNewRequest(t, http.MethodPost,
 			"/api/books/"+isbn, jsonBytes, db)
 		b, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json"+
+		// Assert
+		assertContentType(t, response, "Should have the json"+
 			" content type application/json")
 		assertStatus(t, response.Code, http.StatusConflict, "Should get status"+
 			" code 409: status conflict")
-		assertError(t, string(b), "A book with this ISBN already exits") // TODO fixa så att error meddelanden är consts och korrekta
+		assertError(t, string(b), "A book with this ISBN already exits")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("Creates a new book and sets the time parameter", func(t *testing.T) {
@@ -200,17 +207,18 @@ func TestCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		response := createNewRequest(t, http.MethodPost,
+		response, _ := createNewRequest(t, http.MethodPost,
 			"/api/books/"+isbn, jsonBytes, db)
 		b, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json"+
+		// Assert
+		assertContentType(t, response, "Should have the json"+
 			" content type application/json")
 		assertStatus(t, response.Code, http.StatusForbidden, "Should get status"+
 			" code 403: status forbidden")
 		assertError(t, string(b), "Not allowed to change CreateTime or UpdateTime")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("Creates a new book with isbn on the wrong format", func(t *testing.T) {
@@ -223,29 +231,33 @@ func TestCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		response := createNewRequest(t, http.MethodPost,
+		response, _ := createNewRequest(t, http.MethodPost,
 			"/api/books/"+isbn, jsonBytes, db)
 		b, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json"+
+		// Assert
+		assertContentType(t, response, "Should have the json"+
 			" content type application/json")
 		assertStatus(t, response.Code, http.StatusNotAcceptable, "Should get status"+
 			" code 406: status forbidden")
 		assertError(t, string(b), "validation failed, field error(s):"+
 			" isbn . Fix these error before proceeding")
+		defer response.Result().Body.Close()
 	})
 }
 
-func TestGet(t *testing.T) { //List
+func TestGet(t *testing.T) { // List
 	db, cleanup := createTempDatabase(t)
-	defer cleanup()
+	defer func() {
+		err := cleanup()
+		require.NoError(t, err)
+	}()
 
 	createdBooks := t.Run("Creates two book instances and "+
 		"stores it in the library database",
 		func(t *testing.T) {
-			/// A new book
+			// A new book
 			isbn := "1233211233215"
 			want := validBook(isbn)
 			dataInfo := &want
@@ -254,10 +266,11 @@ func TestGet(t *testing.T) { //List
 			require.NoError(t, err)
 
 			// Act
-			_ = createNewRequest(t, http.MethodPost,
+			response, _ := createNewRequest(t, http.MethodPost,
 				"/api/books/"+isbn, jsonBytes, db)
+			defer response.Result().Body.Close()
 
-			//New book
+			// New book
 			isbn2 := "1233211233213"
 			want2 := validBook(isbn2)
 			want2.Title = "harry potter"
@@ -267,77 +280,83 @@ func TestGet(t *testing.T) { //List
 			require.NoError(t, err2)
 
 			// Act
-			_ = createNewRequest(t, http.MethodPost,
+			response, _ = createNewRequest(t, http.MethodPost,
 				"/api/books/"+isbn2, jsonBytes2, db)
+			defer response.Result().Body.Close()
 		})
 	require.True(t, createdBooks)
 
 	t.Run("gets all the books in the library database", func(t *testing.T) {
 		// Arange
-		response := createNewRequest(t, http.MethodGet,
+		response, server := createNewRequest(t, http.MethodGet,
 			"/api/books", nil, db)
-		want := ReadDatabaseList(db)
+		want := server.store.ReadDatabaseList()
 
-		//act
+		// Act
 		var got []Book
 		err := json.NewDecoder(response.Body).Decode(&got)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json "+
+		// Assert
+		assertContentType(t, response, "Should have the json "+
 			"content type application/json")
 		assertStatus(t, response.Code, http.StatusOK, "Should get status "+
 			"code 200: status OK")
 		assertEqualBooks(t, got, want, "Should be equal")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("get a specific book in the library", func(t *testing.T) {
 		// Arange
 		isbn := "1233211233213"
-		response := createNewRequest(t, http.MethodGet,
+		response, server := createNewRequest(t, http.MethodGet,
 			"/api/books/"+isbn, nil, db)
-		want := FindSpecificBook(db, isbn)
+		want := server.store.FindSpecificBook(isbn)
 
 		// Act
 		var got Book
 		err := json.NewDecoder(response.Body).Decode(&got)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json "+
+		// Assert
+		assertContentType(t, response, "Should have the json "+
 			"content type application/json")
 		assertStatus(t, response.Code, http.StatusOK, "Should get status "+
 			"code 200: status OK")
 		assertEqualBook(t, got, want, "Should be equal")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("get a book that does not exist in the library", func(t *testing.T) {
 		// Arange
 		isbn := "1233211233216"
-		response := createNewRequest(t, http.MethodGet,
+		response, _ := createNewRequest(t, http.MethodGet,
 			"/api/books/"+isbn, nil, db)
 
 		// Act
 		var got Book
 		err := json.NewDecoder(response.Body).Decode(&got)
-		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json content type application/json")
+		// Assert
+		assertContentType(t, response, "Should have the json content type application/json")
 		assertError(t, err.Error(), "invalid character 'T' looking for beginning of value")
 		assertStatus(t, response.Code, http.StatusNotFound, "Should have status code 404: statusNotFound")
+		defer response.Result().Body.Close()
 	})
 }
 
-func TestDelete(t *testing.T) { //List
+func TestDelete(t *testing.T) { // List
 	t.Parallel() // TODO Undersök om denna behövs
 	db, cleanup := createTempDatabase(t)
-	defer cleanup()
+	defer func() {
+		err := cleanup()
+		require.NoError(t, err)
+	}()
 
 	createdBooks := t.Run("Creates two book instances and stores it in "+
 		"the library database",
 		func(t *testing.T) {
-			/// A new book
+			// A new book
 			isbn := "1233211233215"
 			want := validBook(isbn)
 			dataInfo := &want
@@ -346,10 +365,11 @@ func TestDelete(t *testing.T) { //List
 			require.NoError(t, err)
 
 			// Act
-			_ = createNewRequest(t, http.MethodPost,
+			response, _ := createNewRequest(t, http.MethodPost,
 				"/api/books/"+isbn, jsonBytes, db)
+			defer response.Result().Body.Close()
 
-			//New book
+			// New book
 			isbn2 := "1233211233213"
 			want2 := validBook(isbn2)
 			want2.Title = "harry potter"
@@ -359,8 +379,9 @@ func TestDelete(t *testing.T) { //List
 			require.NoError(t, err2)
 
 			// Act
-			_ = createNewRequest(t, http.MethodPost,
+			response, _ = createNewRequest(t, http.MethodPost,
 				"/api/books/"+isbn2, jsonBytes2, db)
+			defer response.Result().Body.Close()
 		})
 
 	require.True(t, createdBooks)
@@ -368,46 +389,50 @@ func TestDelete(t *testing.T) { //List
 	t.Run("Delete a book that does exist in the library", func(t *testing.T) {
 		// Arange
 		isbn := "1233211233213"
-		response := createNewRequest(t, http.MethodDelete,
+		response, server := createNewRequest(t, http.MethodDelete,
 			"/api/books/"+isbn, nil, db)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json "+
+		// Assert
+		assertContentType(t, response, "Should have the json "+
 			"content type application/json")
 		assertStatus(t, response.Code, http.StatusOK, "Should have status"+
 			"code 200: status OK")
-		assertDeletedBook(t, isbn, db, "Checks if the book is deleted from "+
+		assertDeletedBook(t, isbn, server, "Checks if the book is deleted from "+
 			"the database")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("Delete a book that does not exist in the library", func(t *testing.T) {
 		// Arange
 		isbn := "1233211233210"
-		response := createNewRequest(t, http.MethodDelete,
+		response, server := createNewRequest(t, http.MethodDelete,
 			"/api/books/"+isbn, nil, db)
 		b, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json "+
+		// Assert
+		assertContentType(t, response, "Should have the json "+
 			"content type application/json")
 		assertStatus(t, response.Code, http.StatusNotFound, "Should have status "+
 			"code 404: statusNotFound")
-		assertDeletedBook(t, isbn, db, "Checks if the book is deleted from "+
+		assertDeletedBook(t, isbn, server, "Checks if the book is deleted from "+
 			"the database")
 		assertError(t, string(b), "The book did not exist in the library or "+
 			"was already deleted")
+		defer response.Result().Body.Close()
 	})
-
 }
 
 func TestUpdate(t *testing.T) {
 	db, cleanup := createTempDatabase(t)
-	defer cleanup()
+	defer func() {
+		err := cleanup()
+		require.NoError(t, err)
+	}()
 
 	createdBook := t.Run("Creates a book instances and stores it in the library database",
 		func(t *testing.T) {
-			/// A new book
+			// A new book
 			isbn := "1233211233215"
 			want := validBook(isbn)
 			dataInfo := &want
@@ -415,8 +440,9 @@ func TestUpdate(t *testing.T) {
 			require.NoError(t, err)
 
 			// Act
-			_ = createNewRequest(t, http.MethodPost,
+			response, _ := createNewRequest(t, http.MethodPost,
 				"/api/books/"+isbn, jsonBytes, db)
+			defer response.Result().Body.Close()
 		})
 	require.True(t, createdBook)
 	t.Run("Updates a specific book which exists in the library",
@@ -429,8 +455,8 @@ func TestUpdate(t *testing.T) {
 			jsonBytes, err := json.Marshal(dataInfo)
 			require.NoError(t, err)
 
-			//act
-			response := createNewRequest(t, http.MethodPut,
+			// Act
+			response, _ := createNewRequest(t, http.MethodPut,
 				"/api/books/"+isbn, jsonBytes, db)
 
 			// Act
@@ -438,12 +464,13 @@ func TestUpdate(t *testing.T) {
 			err = json.NewDecoder(response.Body).Decode(&got)
 			require.NoError(t, err)
 
-			//assert
-			assertContentType(t, response, jsonContentType, "Should have the json "+
+			// Assert
+			assertContentType(t, response, "Should have the json "+
 				"content type application/json")
 			assertStatus(t, response.Code, http.StatusOK, "Should jave status "+
 				"code 200: status OK")
 			assertEqualBook(t, got, want, "Should be equal")
+			defer response.Result().Body.Close()
 		})
 
 	t.Run("Updates a specific book that does not exists in the library",
@@ -456,18 +483,19 @@ func TestUpdate(t *testing.T) {
 			jsonBytes, err := json.Marshal(dataInfo)
 			require.NoError(t, err)
 
-			//act
-			response := createNewRequest(t, http.MethodPut,
+			// Act
+			response, _ := createNewRequest(t, http.MethodPut,
 				"/api/books/"+isbn, jsonBytes, db)
 			b, err := ioutil.ReadAll(response.Body)
 			require.NoError(t, err)
 
-			//assert
-			assertContentType(t, response, jsonContentType, "Should have the json "+
+			// Assert
+			assertContentType(t, response, "Should have the json "+
 				"content type application/json")
 			assertStatus(t, response.Code, http.StatusNotFound, "Should jave status "+
 				"code 200: status OK")
 			assertError(t, string(b), "The book did not exist in the library")
+			defer response.Result().Body.Close()
 		})
 
 	t.Run("changing the ISBN which is not allowed ", func(t *testing.T) {
@@ -478,18 +506,19 @@ func TestUpdate(t *testing.T) {
 		jsonBytes, err := json.Marshal(dataInfo)
 		require.NoError(t, err)
 
-		//act
-		response := createNewRequest(t, http.MethodPut,
+		// Act
+		response, _ := createNewRequest(t, http.MethodPut,
 			"/api/books/"+isbn, jsonBytes, db)
 		b, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json "+
+		// Assert
+		assertContentType(t, response, "Should have the json "+
 			"content type application/json")
 		assertStatus(t, response.Code, http.StatusForbidden, "Should jave status "+
 			"code 403: statusForbidden")
 		assertError(t, string(b), "Not allowed to change ISBN")
+		defer response.Result().Body.Close()
 	})
 
 	t.Run("Spamming update which is not allowed ", func(t *testing.T) {
@@ -500,25 +529,24 @@ func TestUpdate(t *testing.T) {
 		jsonBytes, err := json.Marshal(dataInfo)
 		require.NoError(t, err)
 
-		//Update first time
-		_ = createNewRequest(t, http.MethodPut,
+		// Update first time
+		response, _ := createNewRequest(t, http.MethodPut,
 			"/api/books/"+isbn, jsonBytes, db)
+		defer response.Result().Body.Close()
 
-		//Try to update before 10 seconds have passed 							//TODO fixa detta
-		time.Sleep(2 * time.Second)
-
-		//act
-		response := createNewRequest(t, http.MethodPut,
+		// Act
+		response, _ = createNewRequest(t, http.MethodPut,
 			"/api/books/"+isbn, jsonBytes, db)
 		b, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 
-		//assert
-		assertContentType(t, response, jsonContentType, "Should have the json"+
+		// Assert
+		assertContentType(t, response, "Should have the json"+
 			" content type application/json")
 		assertStatus(t, response.Code, http.StatusTooEarly, "Should jave status "+
 			"code 425: statusToEarly")
 		assertError(t, string(b), "Updated a few seconds ago, please wait a "+
 			"moment before updating again")
+		defer response.Result().Body.Close()
 	})
 }

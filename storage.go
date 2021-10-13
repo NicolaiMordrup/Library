@@ -7,61 +7,68 @@ import (
 	"time"
 
 	// Import sqlite driver
+
+	"go.uber.org/zap"
+	// sqlite database library
 	_ "modernc.org/sqlite"
 )
 
-type DBstorage struct {
-	db *sql.DB
+type DBStorage struct {
+	db  *sql.DB
+	log *zap.SugaredLogger
 }
-
-// Note(sn): Rename this file and create a new type DBStorage struct
-// Struct should contain the sql database
-// Server should call this storage
 
 // DatabaseQuery Prepers a database query and executes the query on the
 // database. It takes as input a query string and gives as output the rows
-func InsertIntoDatabase(db *sql.DB, b Book) {
-	stmtL, errL := db.Prepare("INSERT INTO library (isbn,title ,createTime,updateTime, publisher) VALUES(?,?,?,?,?)")
-	stmtA, errA := db.Prepare("INSERT INTO author(isbn,firstName, lastName) VALUES(?,?,?)")
+func (storage *DBStorage) InsertIntoDatabase(b Book) {
+	stmtL, errL := storage.db.Prepare("INSERT INTO library (isbn,title ,createTime,updateTime, publisher) VALUES(?,?,?,?,?)")
+	stmtA, errA := storage.db.Prepare("INSERT INTO author(isbn,firstName, lastName) VALUES(?,?,?)")
 
 	if errL != nil || errA != nil {
 		err := errors.New(errL.Error())
 		err = fmt.Errorf("%w, %s", err, errA.Error())
-		handleErr("Failed to insert into database", err)
+		storage.handleErr("Failed to prepare statement", err)
 		return
 	}
-	stmtA.Exec(b.ISBN, b.Author.FirstName, b.Author.LastName)
-	stmtL.Exec(b.ISBN, b.Title, b.CreateTime, b.UpdateTime, b.Publisher)
+	_, errA = stmtA.Exec(b.ISBN, b.Author.FirstName, b.Author.LastName)
+	_, errL = stmtL.Exec(b.ISBN, b.Title, b.CreateTime, b.UpdateTime, b.Publisher)
+
+	if errL != nil || errA != nil {
+		err := errors.New(errL.Error())
+		err = fmt.Errorf("%w, %s", err, errA.Error())
+		storage.handleErr("Failed to insert into database", err)
+		return
+	}
 }
 
 // ReadDatabase reads the information that we get from the database.
-func ReadDatabaseList(db *sql.DB) []Book {
-	rows, err := db.Query("SELECT library.isbn, library.title, library.createTime,library.updateTime,author.firstName, author.lastName ,library.publisher FROM library INNER JOIN author ON library.isbn = author.isbn;")
+func (storage *DBStorage) ReadDatabaseList() []Book {
+	rows, err := storage.db.Query("SELECT library.isbn, library.title, library.createTime,library.updateTime,author.firstName, author.lastName ,library.publisher FROM library INNER JOIN author ON library.isbn = author.isbn;")
 	var b []Book
 	if err != nil {
-		handleErr("Failed to QUERY the statment to the database", err)
+		storage.handleErr("Failed to QUERY the statement to the database", err)
 		return b
 	}
-	return ReadRows(rows, b)
+	return storage.ReadRows(rows, b)
 }
 
-//Reads from the database and find a specific book that exists.
-func FindSpecificBook(db *sql.DB, isbnToFind string) Book {
-	rows, err := db.Query(fmt.Sprintf("SELECT library.isbn, library.title,library.createTime,library.updateTime,author.firstName, author.lastName ,library.publisher FROM library INNER JOIN author ON library.isbn = author.isbn WHERE library.isbn=%s;", isbnToFind))
+// Reads from the database and find a specific book that exists.
+func (storage *DBStorage) FindSpecificBook(isbnToFind string) Book {
+	rows, err := storage.db.Query(fmt.Sprintf("SELECT library.isbn, library.title,library.createTime,library.updateTime,author.firstName, author.lastName ,library.publisher FROM library INNER JOIN author ON library.isbn = author.isbn WHERE library.isbn=%s;", isbnToFind))
 	var b []Book
 	if err != nil {
-		handleErr("Failed to QUERY the statment to the database", err)
+		storage.handleErr("Failed to QUERY the statement to the database", err)
 		return Book{}
 	}
-	res := ReadRows(rows, b)
+	res := storage.ReadRows(rows, b)
 	if len(res) != 0 {
 		return res[0]
 	}
 	return Book{}
 }
 
-//ReadRows gets the information from the query and stores it in the Book slice.
-func ReadRows(rows *sql.Rows, b []Book) []Book {
+// ReadRows gets the information from the query and stores it in the Book slice.
+func (storage *DBStorage) ReadRows(rows *sql.Rows, b []Book) []Book {
 	var isbndb string
 	var titledb string
 	var createTimedb time.Time
@@ -71,7 +78,7 @@ func ReadRows(rows *sql.Rows, b []Book) []Book {
 	var publisherdb string
 
 	for rows.Next() {
-		rows.Scan(
+		err := rows.Scan(
 			&isbndb,
 			&titledb,
 			&createTimedb,
@@ -80,6 +87,11 @@ func ReadRows(rows *sql.Rows, b []Book) []Book {
 			&lastNamedb,
 			&publisherdb,
 		)
+		if err != nil {
+			storage.handleErr("Failed to QUERY the statement to the database", err)
+			return []Book{}
+		}
+
 		b = append(b, Book{ISBN: isbndb, Title: titledb, CreateTime: createTimedb,
 			UpdateTime: updateTimedb, Author: Author{FirstName: firstNamedb,
 				LastName: lastNamedb}, Publisher: publisherdb})
@@ -87,18 +99,19 @@ func ReadRows(rows *sql.Rows, b []Book) []Book {
 	return b
 }
 
-//Deletes a specific book from the database
-func DeleteBookFromDB(db *sql.DB, isbn string) {
+// Deletes a specific book from the database
+func (storage *DBStorage) DeleteBookFromDB(isbn string) {
 	for _, table := range []string{"library", "author"} {
-		_, err := db.Exec(fmt.Sprintf("DELETE FROM %s WHERE isbn=%s;", table, isbn))
+		_, err := storage.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE isbn=%s;",
+			table, isbn))
 		if err != nil {
-			handleErr(fmt.Sprintf("failed to delete %s from database", isbn), err)
+			storage.handleErr(fmt.Sprintf("failed to delete %s from database",
+				isbn), err)
 		}
 	}
 }
 
-// TODO fix such that this is a log
-//Handles the error printing
-func handleErr(errMessage string, err error) {
-	fmt.Println(fmt.Errorf("database Error: %s, %s", errMessage, err.Error()))
+// Handles the error printing
+func (storage *DBStorage) handleErr(errMessage string, err error) {
+	storage.log.Infow("starting server", "Error", fmt.Errorf("database Error: %s, %v", errMessage, err.Error()))
 }

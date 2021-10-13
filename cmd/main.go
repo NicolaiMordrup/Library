@@ -27,23 +27,18 @@ func main() {
 	}
 	minDurationBetweenUpdates, err := time.ParseDuration(minDurationBetweenUpdatesStr)
 	check(err, "failed to parse min duration between updates")
-	_ = minDurationBetweenUpdates
 
 	// Setup logger
 	structuredLogger, _ := zap.NewProduction()
 	log := structuredLogger.Sugar()
 
 	// Connect to database
-	// Note(sn): add storage constructor stuff here
-	// Note(sn): add logger to database (call it log)
 	db, err := library.NewDB(connstr)
 	check(err, "failed to open sqlite connection")
 	check(library.EnsureSchema(db), "migration failed")
 
 	// Initialize and start server
-	// Note(sn): add min duration to server constructor
-	// Note(sn): add logger to server
-	myServer := library.NewServer(db)
+	myServer := library.NewServer(db, log, minDurationBetweenUpdates)
 	addr := fmt.Sprintf(":%v", portStr)
 	log.Infow("starting server",
 		"addr", addr,

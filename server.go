@@ -3,75 +3,73 @@ package library
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
-type BookErr string
-
-//TODO fixa så att dessa stämmer
 const (
 	jsonContentType = "application/json"
-	ErrEncodeFail   = BookErr("Failed to Encode the book instance")
-	ErrDidNotExist  = BookErr("The book did not exist in the library")
 )
-
-func (e BookErr) Error() string {
-	return string(e)
-}
 
 // Server contains the server stuff.
 type Server struct {
 	router                    *mux.Router
-	db                        *sql.DB
+	store                     DBStorage
 	minDurationBetweenUpdates time.Duration
+	log                       *zap.SugaredLogger
 }
 
 // NewServer creates a new server instance.
-func NewServer(datab *sql.DB) *Server {
+func NewServer(
+	dataBase *sql.DB,
+	logger *zap.SugaredLogger,
+	minDurationTimeBetweenUpdates time.Duration,
+) *Server {
 	s := &Server{}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/api/books", s.GetBooks).Methods("GET")
+	router.HandleFunc("/api/books", s.ListBooks).Methods("GET")
 	router.HandleFunc("/api/books/{isbn}", s.GetBook).Methods("GET")
 	router.HandleFunc("/api/books/{isbn}", s.CreateBook).Methods("POST")
 	router.HandleFunc("/api/books/{isbn}", s.UpdateBook).Methods("PUT")
 	router.HandleFunc("/api/books/{isbn}", s.DeleteBook).Methods("DELETE")
 
 	s.router = router
-	s.db = datab
+	s.store = DBStorage{db: dataBase, log: logger}
+	s.log = logger
+	s.minDurationBetweenUpdates = minDurationTimeBetweenUpdates
 	return s
 }
 
 // ServeHTTP is needed to be implemented when we use the router in the struct.
-func (r *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.router.ServeHTTP(w, req)
+func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	s.router.ServeHTTP(w, req)
 }
 
 // HandleErr for when we get an error.
 // If succesfull it writes what type of error in the header we get and then
 // display the error message for the user.
-func HandleErr(w http.ResponseWriter, code int, message string) {
+func (s *Server) HandleErr(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_, err := w.Write([]byte(message))
 	if err != nil {
-		log.Printf("%v, %v \n", message, err)
+		s.log.Infow("Error", fmt.Sprintf("%v, %v ", message, err))
 	}
 }
 
 // GetBooks retreives all the books that exists in the library structure.
 // if succesfull, it writes the JSON encoding of the books slice to the stream
-// Note(sn): Change to "ListBooks"
-func (s *Server) GetBooks(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ListBooks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	book := ReadDatabaseList(s.db)
+	book := s.store.ReadDatabaseList()
 
 	if err := json.NewEncoder(w).Encode(book); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		s.HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -82,14 +80,14 @@ func (s *Server) GetBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r) // Fetches the parameters of the http.Request URL
 
-	book := FindSpecificBook(s.db, params["isbn"])
+	book := s.store.FindSpecificBook(params["isbn"])
 	if (Book{} == book) {
-		HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
+		s.HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
 		return
 	}
 
 	if err := json.NewEncoder(w).Encode(book); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		s.HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -103,27 +101,28 @@ func (s *Server) CreateBook(w http.ResponseWriter, r *http.Request) {
 	var book Book
 
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to decode book")
+		s.HandleErr(w, http.StatusBadRequest, "Failed to decode book")
 		return
 	}
-	if exists := FindSpecificBook(s.db, book.ISBN); (exists != Book{}) {
-		HandleErr(w, http.StatusConflict, "A book with this ISBN already exits")
+	if exists := s.store.FindSpecificBook(book.ISBN); (exists != Book{}) {
+		s.HandleErr(w, http.StatusConflict, "A book with this ISBN already exits")
 		return
 	}
 	if !(book.CreateTime.IsZero() && book.UpdateTime.IsZero()) {
-		HandleErr(w, http.StatusForbidden, "Not allowed to change CreateTime or UpdateTime")
+		s.HandleErr(w, http.StatusForbidden, "Not allowed to change CreateTime "+
+			"or UpdateTime")
 		return
 	}
 	if err := validate(book); err != nil {
-		HandleErr(w, http.StatusNotAcceptable, err.Error())
+		s.HandleErr(w, http.StatusNotAcceptable, err.Error())
 		return
 	}
 
-	// Note(sn): set update time as well (same value as create time)
 	book.CreateTime = time.Now()
-	InsertIntoDatabase(s.db, book)
+	book.UpdateTime = time.Now()
+	s.store.InsertIntoDatabase(book)
 	if err := json.NewEncoder(w).Encode(book); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		s.HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -135,15 +134,16 @@ func (s *Server) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-Type", "application/json")
 	params := mux.Vars(r)
 
-	if exists := FindSpecificBook(s.db, params["isbn"]); (exists == Book{}) {
-		HandleErr(w, http.StatusNotFound, "The book did not exist in the library or was already deleted")
+	if exists := s.store.FindSpecificBook(params["isbn"]); (exists == Book{}) {
+		s.HandleErr(w, http.StatusNotFound, "The book did not exist in the "+
+			"library or was already deleted")
 		return
 	}
 
-	DeleteBookFromDB(s.db, params["isbn"])
-	books := ReadDatabaseList(s.db)
+	s.store.DeleteBookFromDB(params["isbn"])
+	books := s.store.ReadDatabaseList()
 	if err := json.NewEncoder(w).Encode(books); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+		s.HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
 }
@@ -155,46 +155,41 @@ func (s *Server) DeleteBook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) UpdateBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-Type", "application/json")
 	params := mux.Vars(r)
-	// Note(sn): rename to existing book
-	exists := FindSpecificBook(s.db, params["isbn"])
-	if (exists == Book{}) {
-		HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
+	existingBook := s.store.FindSpecificBook(params["isbn"])
+	if (existingBook == Book{}) {
+		s.HandleErr(w, http.StatusNotFound, "The book did not exist in the library")
 		return
 	}
 
-	createdTime := exists.CreateTime
-	updatedTime := exists.UpdateTime
-	// Note(sn): maybe call this new book?
-	var book Book
+	createdTime := existingBook.CreateTime
+	updatedTime := existingBook.UpdateTime
+	var newBook Book
 
-	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to decode book")
+	if err := json.NewDecoder(r.Body).Decode(&newBook); err != nil {
+		s.HandleErr(w, http.StatusBadRequest, "Failed to decode book")
 		return
 	}
-	if book.ISBN != params["isbn"] {
-		HandleErr(w, http.StatusForbidden, "Not allowed to change ISBN")
+	if newBook.ISBN != params["isbn"] {
+		s.HandleErr(w, http.StatusForbidden, "Not allowed to change ISBN")
 		return
 	}
-	// Note(sn): use configured value, this will make it easier to test
-	// time.Now().Sub(updatedTime) < s.minDurationBetweenUpdates
-	// time.Now().After(updatedTime.Add(s.minDurationBetweenUpdates))
-	if (time.Now().Unix() - updatedTime.Unix()) < 10 {
-		HandleErr(w, http.StatusTooEarly, "Updated a few seconds ago, please wait a moment before updating again")
+	if time.Since(updatedTime) < s.minDurationBetweenUpdates {
+		s.HandleErr(w, http.StatusTooEarly, "Updated a few seconds ago, "+
+			"please wait a moment before updating again")
 		return
 	}
-	if err := validate(book); err != nil {
-		HandleErr(w, http.StatusNotAcceptable, err.Error())
+	if err := validate(newBook); err != nil {
+		s.HandleErr(w, http.StatusNotAcceptable, err.Error())
 		return
 	}
 
-	book.CreateTime = createdTime
-	book.UpdateTime = time.Now()
-	DeleteBookFromDB(s.db, exists.ISBN)
-	InsertIntoDatabase(s.db, book)
+	newBook.CreateTime = createdTime
+	newBook.UpdateTime = time.Now()
+	s.store.DeleteBookFromDB(newBook.ISBN)
+	s.store.InsertIntoDatabase(newBook)
 
-	if err := json.NewEncoder(w).Encode(book); err != nil {
-		HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
+	if err := json.NewEncoder(w).Encode(newBook); err != nil {
+		s.HandleErr(w, http.StatusBadRequest, "Failed to Encode the book instance")
 		return
 	}
-
 }
