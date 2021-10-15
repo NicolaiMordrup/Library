@@ -5,9 +5,10 @@ package library;
 option go_package = "github.com/Nicolai.mordrup/library/librarypb;librarypb";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 message Book {
-    // Immutable. Required. The id for the book.    
+    // Immutable. Required. The id for the book.
     string isbn = 1;
 
     // Required. Book title
@@ -40,15 +41,19 @@ message CreateBookRequest{
 }
 
 message GetBookRequest{
-    string isbn = 1;
+    // Book name in the format 'books/{isbn}'
+    string name = 1;
 }
 
 message UpdateBookRequest{
-    Book book = 1;
+    // Book name in the form 'books/{isbn}'
+    string name = 1;
+    Book book = 2;
 }
 
 message DeleteBookRequest{
-    string isbn = 1;
+    // Book name in the format 'books/{isbn}'
+    string name = 1;
 }
 
 message DeleteBookResponse{}
@@ -61,17 +66,35 @@ message ListBookResponse{
 
 
 service LibraryService{
+    rpc CreateBook (CreateBookRequest) returns (Book) {
+        option (google.api.http) = {
+            post: "/books"
+            body: "book"
+        };
+    }
 
-    rpc CreateBook (CreateBookRequest) returns (Book);
+    rpc GetBook (GetBookRequest) returns (Book) {
+        option (google.api.http) = {
+            get: "/{name=books/*}"
+        };
+    }
 
-    rpc GetBook (GetBookRequest) returns (Book); 
-    
-    
-    rpc UpdateBook (UpdateBookRequest) returns (Book); 
-    
-    
-    rpc DeleteBook (DeleteBookRequest) returns (Book);
-    
+    rpc UpdateBook (UpdateBookRequest) returns (Book) {
+        option (google.api.http) = {
+            patch: "/{name=books/*}"
+            body: "book"
+        };
+    }
 
-    rpc ListBooks(ListBookRequest) returns (ListBookResponse);
+    rpc DeleteBook (DeleteBookRequest) returns (Book) {
+        option (google.api.http) = {
+            delete: "/{name=books/*}"
+        };
+    }
+
+    rpc ListBooks(ListBookRequest) returns (ListBookResponse) {
+        option (google.api.http) = {
+            get: "/books"
+        };
+    }
 }
