@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	librarypb "github.com/NicolaiMordrup/library/gen/proto/go"
 )
 
 // Struct for the book properties.
@@ -15,6 +17,17 @@ type Book struct {
 	UpdateTime time.Time `json:"updateTime"` // The time of update for book instance
 	Publisher  string    `json:"publisher"`
 	Author     Author    `json:"author"` // Embedded author struct
+}
+
+func NewBookFromProto(b *librarypb.Book) Book {
+	return Book{ //assign all fields
+
+	}
+}
+
+func (b *Book) AsProto() *librarypb.Book {
+	return &librarypb.Book{ //TOdo lägg till alla fält
+	}
 }
 
 // Struct for the books Author properties.

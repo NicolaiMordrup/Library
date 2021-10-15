@@ -1,20 +1,6 @@
 package library
 
-import (
-	"bytes"
-	"database/sql"
-	"encoding/json"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-)
-
+/*
 func validBook(isbn string) Book {
 	b := Book{
 		ISBN:  isbn,
@@ -550,3 +536,4 @@ func TestUpdate(t *testing.T) {
 		defer response.Result().Body.Close()
 	})
 }
+*/

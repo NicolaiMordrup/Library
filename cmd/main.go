@@ -2,18 +2,20 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
 	library "github.com/NicolaiMordrup/library"
 	"go.uber.org/zap"
+
+	//"go.uber.org/zap"
 	_ "modernc.org/sqlite"
 )
 
 func main() {
+
 	// Configuration
-	connstr := "file:librarystorage.db"
+	connstr := "./librarystorage.db"
 	if envVal := os.Getenv("SQLITE_DB_CONN"); envVal != "" {
 		connstr = envVal
 	}
@@ -43,7 +45,8 @@ func main() {
 	log.Infow("starting server",
 		"addr", addr,
 	)
-	log.Fatal(http.ListenAndServe(addr, myServer))
+	//log.Fatal(http.ListenAndServe(addr, myServer))
+	myServer.Run()
 }
 
 func check(err error, msg string) {
@@ -51,4 +54,5 @@ func check(err error, msg string) {
 		fmt.Printf("%v, err: %v\n", msg, err)
 		os.Exit(1)
 	}
+
 }

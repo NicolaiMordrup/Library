@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package library;
+
+option go_package = "github.com/Nicolai.mordrup/library/librarypb;librarypb";
+
+import "google/protobuf/timestamp.proto";
+
+message Book {
+    // Immutable. Required. The id for the book.    
+    string isbn = 1;
+
+    // Required. Book title
+    string title = 2;
+
+    // Output only. The time of creation of book instance
+    google.protobuf.Timestamp create_time = 3;
+
+	// Output only. The time of update for book instance
+    google.protobuf.Timestamp update_time = 4;
+
+    // publisher of the book
+    string publisher = 5;
+
+    // Required. Embedded author struct
+    Author author = 6;
+}
+
+message Author {
+    // Required. first name of the author
+    string first_name = 1;
+
+    // Required. last name of the author
+    string last_name = 2;
+}
+
+
+message CreateBookRequest{
+    Book book = 1;
+}
+
+message GetBookRequest{
+    string isbn = 1;
+}
+
+message UpdateBookRequest{
+    Book book = 1;
+}
+
+message DeleteBookRequest{
+    string isbn = 1;
+}
+
+message DeleteBookResponse{}
+
+message ListBookRequest{}
+
+message ListBookResponse{
+    repeated Book book = 1;
+}
+
+
+service LibraryService{
+
+    rpc CreateBook (CreateBookRequest) returns (Book);
+
+    rpc GetBook (GetBookRequest) returns (Book); 
+    
+    
+    rpc UpdateBook (UpdateBookRequest) returns (Book); 
+    
+    
+    rpc DeleteBook (DeleteBookRequest) returns (Book);
+    
+
+    rpc ListBooks(ListBookRequest) returns (ListBookResponse);
+}
