@@ -1,3 +1,8 @@
+# Library GRPC server and GRPC gateway CRUD api
+This is a GRPC server and a GRPC gateway which implements a CRUD 
+rest API.
+
+
 Endpoints: 
 
 | Method        | Endpoint      |  Description             |
