@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	// Import sqlite driver
-
 	"go.uber.org/zap"
+
 	// sqlite database library
 	_ "modernc.org/sqlite"
 )
@@ -20,7 +19,7 @@ type DBStorage struct {
 
 // DatabaseQuery Prepers a database query and executes the query on the
 // database. It takes as input a query string and gives as output the rows
-func (storage *DBStorage) InsertIntoDatabase(b Book) {
+func (storage *DBStorage) InsertIntoDatabase(b Book) error {
 	stmtL, errL := storage.db.Prepare("INSERT INTO library (isbn,title ,createTime,updateTime, publisher) VALUES(?,?,?,?,?)")
 	stmtA, errA := storage.db.Prepare("INSERT INTO author(isbn,firstName, lastName) VALUES(?,?,?)")
 
@@ -28,7 +27,7 @@ func (storage *DBStorage) InsertIntoDatabase(b Book) {
 		err := errors.New(errL.Error())
 		err = fmt.Errorf("%w, %s", err, errA.Error())
 		storage.handleErr("Failed to prepare statement", err)
-		return
+		return err
 	}
 	_, errA = stmtA.Exec(b.ISBN, b.Author.FirstName, b.Author.LastName)
 	_, errL = stmtL.Exec(b.ISBN, b.Title, b.CreateTime, b.UpdateTime, b.Publisher)
@@ -37,8 +36,10 @@ func (storage *DBStorage) InsertIntoDatabase(b Book) {
 		err := errors.New(errL.Error())
 		err = fmt.Errorf("%w, %s", err, errA.Error())
 		storage.handleErr("Failed to insert into database", err)
-		return
+		return err
 	}
+
+	return nil
 }
 
 // ReadDatabase reads the information that we get from the database.
@@ -100,18 +101,23 @@ func (storage *DBStorage) ReadRows(rows *sql.Rows, b []Book) []Book {
 }
 
 // Deletes a specific book from the database
-func (storage *DBStorage) DeleteBookFromDB(isbn string) {
+func (storage *DBStorage) DeleteBookFromDB(isbn string) error {
 	for _, table := range []string{"library", "author"} {
-		_, err := storage.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE isbn=%s;",
+		res, err := storage.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE isbn=%s;",
 			table, isbn))
 		if err != nil {
 			storage.handleErr(fmt.Sprintf("failed to delete %s from database",
 				isbn), err)
 		}
+		if rows, _ := res.RowsAffected(); rows == 0 {
+			return errors.New("book did not exist in the library database")
+		}
 	}
+	return nil
 }
 
 // Handles the error printing
 func (storage *DBStorage) handleErr(errMessage string, err error) {
-	storage.log.Infow("starting server", "Error", fmt.Errorf("database Error: %s, %v", errMessage, err.Error()))
+	storage.log.Infow("starting server", "Error",
+		fmt.Errorf("database Error: %s, %v", errMessage, err.Error()))
 }

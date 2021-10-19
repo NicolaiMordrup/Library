@@ -6,7 +6,8 @@ import (
 	"strings"
 	"time"
 
-	librarypb "github.com/NicolaiMordrup/library/gen/proto/go"
+	librarypb "github.com/NicolaiMordrup/library/gen/proto/go/librarypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Struct for the book properties.
@@ -17,17 +18,6 @@ type Book struct {
 	UpdateTime time.Time `json:"updateTime"` // The time of update for book instance
 	Publisher  string    `json:"publisher"`
 	Author     Author    `json:"author"` // Embedded author struct
-}
-
-func NewBookFromProto(b *librarypb.Book) Book {
-	return Book{ //assign all fields
-
-	}
-}
-
-func (b *Book) AsProto() *librarypb.Book {
-	return &librarypb.Book{ //TOdo lägg till alla fält
-	}
 }
 
 // Struct for the books Author properties.
@@ -67,8 +57,41 @@ func validate(b Book) error {
 	}
 
 	if len(fieldErrors) != 0 {
-		return fmt.Errorf("validation failed, field error(s):%v. Fix these error before proceeding",
+		return fmt.Errorf("validation failed, field error(s):%v."+
+			" Fix these error before proceeding",
 			strings.Join(fieldErrors, ", "))
 	}
 	return nil
+}
+
+// NewBookFromProto converts a *librarypb.Book which is on the proto fromat
+// to the Book instance such that the database can deal with it.
+func NewBookFromProto(b *librarypb.Book) Book {
+	return Book{
+		ISBN:       b.GetName(),
+		Title:      b.GetTitle(),
+		Publisher:  b.GetPublisher(),
+		CreateTime: b.GetCreateTime().AsTime(),
+		UpdateTime: b.GetUpdateTime().AsTime(),
+		Author: Author{
+			FirstName: b.Author.GetFirstName(),
+			LastName:  b.Author.GetLastName(),
+		},
+	}
+}
+
+// AsProto converts a Book instance to the *librarypb.Book which is of proto
+// instance such that the response can deal with it.
+func (b *Book) AsProto() *librarypb.Book {
+	return &librarypb.Book{
+		Name:       b.ISBN,
+		Title:      b.Title,
+		Publisher:  b.Publisher,
+		CreateTime: timestamppb.New(b.CreateTime),
+		UpdateTime: timestamppb.New(b.UpdateTime),
+		Author: &librarypb.Author{
+			FirstName: b.Author.FirstName,
+			LastName:  b.Author.LastName,
+		},
+	}
 }

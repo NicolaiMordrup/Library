@@ -22,7 +22,7 @@ type LibraryServiceClient interface {
 	GetBook(ctx context.Context, in *GetBookRequest, opts ...grpc.CallOption) (*Book, error)
 	UpdateBook(ctx context.Context, in *UpdateBookRequest, opts ...grpc.CallOption) (*Book, error)
 	DeleteBook(ctx context.Context, in *DeleteBookRequest, opts ...grpc.CallOption) (*Book, error)
-	ListBooks(ctx context.Context, in *ListBookRequest, opts ...grpc.CallOption) (*ListBookResponse, error)
+	ListBooks(ctx context.Context, in *ListBooksRequest, opts ...grpc.CallOption) (*ListBooksResponse, error)
 }
 
 type libraryServiceClient struct {
@@ -35,7 +35,7 @@ func NewLibraryServiceClient(cc grpc.ClientConnInterface) LibraryServiceClient {
 
 func (c *libraryServiceClient) CreateBook(ctx context.Context, in *CreateBookRequest, opts ...grpc.CallOption) (*Book, error) {
 	out := new(Book)
-	err := c.cc.Invoke(ctx, "/library.LibraryService/CreateBook", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/librarypb.v1.LibraryService/CreateBook", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (c *libraryServiceClient) CreateBook(ctx context.Context, in *CreateBookReq
 
 func (c *libraryServiceClient) GetBook(ctx context.Context, in *GetBookRequest, opts ...grpc.CallOption) (*Book, error) {
 	out := new(Book)
-	err := c.cc.Invoke(ctx, "/library.LibraryService/GetBook", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/librarypb.v1.LibraryService/GetBook", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (c *libraryServiceClient) GetBook(ctx context.Context, in *GetBookRequest, 
 
 func (c *libraryServiceClient) UpdateBook(ctx context.Context, in *UpdateBookRequest, opts ...grpc.CallOption) (*Book, error) {
 	out := new(Book)
-	err := c.cc.Invoke(ctx, "/library.LibraryService/UpdateBook", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/librarypb.v1.LibraryService/UpdateBook", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,16 +62,16 @@ func (c *libraryServiceClient) UpdateBook(ctx context.Context, in *UpdateBookReq
 
 func (c *libraryServiceClient) DeleteBook(ctx context.Context, in *DeleteBookRequest, opts ...grpc.CallOption) (*Book, error) {
 	out := new(Book)
-	err := c.cc.Invoke(ctx, "/library.LibraryService/DeleteBook", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/librarypb.v1.LibraryService/DeleteBook", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *libraryServiceClient) ListBooks(ctx context.Context, in *ListBookRequest, opts ...grpc.CallOption) (*ListBookResponse, error) {
-	out := new(ListBookResponse)
-	err := c.cc.Invoke(ctx, "/library.LibraryService/ListBooks", in, out, opts...)
+func (c *libraryServiceClient) ListBooks(ctx context.Context, in *ListBooksRequest, opts ...grpc.CallOption) (*ListBooksResponse, error) {
+	out := new(ListBooksResponse)
+	err := c.cc.Invoke(ctx, "/librarypb.v1.LibraryService/ListBooks", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ type LibraryServiceServer interface {
 	GetBook(context.Context, *GetBookRequest) (*Book, error)
 	UpdateBook(context.Context, *UpdateBookRequest) (*Book, error)
 	DeleteBook(context.Context, *DeleteBookRequest) (*Book, error)
-	ListBooks(context.Context, *ListBookRequest) (*ListBookResponse, error)
+	ListBooks(context.Context, *ListBooksRequest) (*ListBooksResponse, error)
 }
 
 // UnimplementedLibraryServiceServer should be embedded to have forward compatible implementations.
@@ -105,7 +105,7 @@ func (UnimplementedLibraryServiceServer) UpdateBook(context.Context, *UpdateBook
 func (UnimplementedLibraryServiceServer) DeleteBook(context.Context, *DeleteBookRequest) (*Book, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteBook not implemented")
 }
-func (UnimplementedLibraryServiceServer) ListBooks(context.Context, *ListBookRequest) (*ListBookResponse, error) {
+func (UnimplementedLibraryServiceServer) ListBooks(context.Context, *ListBooksRequest) (*ListBooksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListBooks not implemented")
 }
 
@@ -130,7 +130,7 @@ func _LibraryService_CreateBook_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/library.LibraryService/CreateBook",
+		FullMethod: "/librarypb.v1.LibraryService/CreateBook",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LibraryServiceServer).CreateBook(ctx, req.(*CreateBookRequest))
@@ -148,7 +148,7 @@ func _LibraryService_GetBook_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/library.LibraryService/GetBook",
+		FullMethod: "/librarypb.v1.LibraryService/GetBook",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LibraryServiceServer).GetBook(ctx, req.(*GetBookRequest))
@@ -166,7 +166,7 @@ func _LibraryService_UpdateBook_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/library.LibraryService/UpdateBook",
+		FullMethod: "/librarypb.v1.LibraryService/UpdateBook",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LibraryServiceServer).UpdateBook(ctx, req.(*UpdateBookRequest))
@@ -184,7 +184,7 @@ func _LibraryService_DeleteBook_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/library.LibraryService/DeleteBook",
+		FullMethod: "/librarypb.v1.LibraryService/DeleteBook",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LibraryServiceServer).DeleteBook(ctx, req.(*DeleteBookRequest))
@@ -193,7 +193,7 @@ func _LibraryService_DeleteBook_Handler(srv interface{}, ctx context.Context, de
 }
 
 func _LibraryService_ListBooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListBookRequest)
+	in := new(ListBooksRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -202,10 +202,10 @@ func _LibraryService_ListBooks_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/library.LibraryService/ListBooks",
+		FullMethod: "/librarypb.v1.LibraryService/ListBooks",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LibraryServiceServer).ListBooks(ctx, req.(*ListBookRequest))
+		return srv.(LibraryServiceServer).ListBooks(ctx, req.(*ListBooksRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -214,7 +214,7 @@ func _LibraryService_ListBooks_Handler(srv interface{}, ctx context.Context, dec
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var LibraryService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "library.LibraryService",
+	ServiceName: "librarypb.v1.LibraryService",
 	HandlerType: (*LibraryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -239,5 +239,5 @@ var LibraryService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "library.proto",
+	Metadata: "librarypb/library.proto",
 }

@@ -19,7 +19,7 @@ var migrations embed.FS
 
 const schemaVersion = 2
 
-// NewDb opens a connection to the sqlite database.
+// NewDB opens a connection to the sqlite database.
 func NewDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {

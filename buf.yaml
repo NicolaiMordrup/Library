@@ -2,6 +2,9 @@ version: v1
 lint:
   use:
     - DEFAULT
+  ignore:
+    - google/api
+    - librarypb/v1/library.proto
 breaking:
   use:
     - FILE

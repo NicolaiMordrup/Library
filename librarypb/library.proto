@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package library;
+package librarypb;
 
 option go_package = "github.com/Nicolai.mordrup/library/librarypb;librarypb";
 
@@ -9,7 +9,7 @@ import "google/api/annotations.proto";
 
 message Book {
     // Immutable. Required. The id for the book.
-    string isbn = 1;
+    string name = 1;
 
     // Required. Book title
     string title = 2;
@@ -56,11 +56,13 @@ message DeleteBookRequest{
     string name = 1;
 }
 
-message DeleteBookResponse{}
+message DeleteBookResponse{
+    Book book = 1;
+}
 
-message ListBookRequest{}
+message ListBooksRequest{}
 
-message ListBookResponse{
+message ListBooksResponse{
     repeated Book book = 1;
 }
 
@@ -81,7 +83,7 @@ service LibraryService{
 
     rpc UpdateBook (UpdateBookRequest) returns (Book) {
         option (google.api.http) = {
-            patch: "/{name=books/*}"
+            put: "/{name=books/*}"
             body: "book"
         };
     }
@@ -92,7 +94,7 @@ service LibraryService{
         };
     }
 
-    rpc ListBooks(ListBookRequest) returns (ListBookResponse) {
+    rpc ListBooks(ListBooksRequest) returns (ListBooksResponse) {
         option (google.api.http) = {
             get: "/books"
         };
