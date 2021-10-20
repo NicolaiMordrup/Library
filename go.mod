@@ -34,13 +34,15 @@ require (
 	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/zap v1.19.1
-	golang.org/x/tools v0.1.5 // indirect
+	golang.org/x/tools v0.1.7 // indirect
 )
 
 require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023 // indirect
+	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.6 // indirect
 )
+
+require golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
